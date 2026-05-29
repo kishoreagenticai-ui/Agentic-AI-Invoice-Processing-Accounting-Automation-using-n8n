@@ -1,0 +1,326 @@
+{
+  "name": "AI Invoice Accounting Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "is:unread has:attachment"
+        }
+      },
+      "id": "gmail-trigger",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download"
+      },
+      "id": "download-attachment",
+      "name": "Download Attachment",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ocr.space/parse/image",
+        "sendBinaryData": true,
+        "binaryPropertyName": "data",
+        "bodyContentType": "multipart-form-data",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "apikey",
+              "value": "YOUR_OCR_SPACE_API_KEY"
+            },
+            {
+              "name": "language",
+              "value": "eng"
+            }
+          ]
+        }
+      },
+      "id": "ocr-agent",
+      "name": "OCR Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "model": "gpt-4o-mini",
+        "messages": {
+          "message": [
+            {
+              "role": "system",
+              "content": "You are an AI invoice extraction agent. Extract invoice details from OCR text and return ONLY valid JSON. Required fields: vendor_name, invoice_number, invoice_date, due_date, currency, subtotal, tax_amount, total_amount, line_items. Convert dates into YYYY-MM-DD format. Remove currency symbols. Return null if values are missing."
+            },
+            {
+              "role": "user",
+              "content": "Extract invoice data from this OCR text: {{$json[\"ParsedResults\"][0][\"ParsedText\"]}}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "invoice-extraction-agent",
+      "name": "Invoice Extraction Agent",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        950,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nif (!data.invoice_number) {\n  throw new Error('Invoice number missing');\n}\n\nif (!data.total_amount) {\n  throw new Error('Total amount missing');\n}\n\nreturn [{ json: data }];"
+      },
+      "id": "validation-agent",
+      "name": "Validation Agent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "model": "gpt-4o-mini",
+        "messages": {
+          "message": [
+            {
+              "role": "system",
+              "content": "You are an accounting classification agent. Classify the invoice into one category only: Office Supplies, Software, Travel, Marketing, Utilities, Food, Hardware, Miscellaneous. Return ONLY JSON with category field."
+            },
+            {
+              "role": "user",
+              "content": "{{$json}}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "classification-agent",
+      "name": "Classification Agent",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "invoices",
+        "columns": "vendor_name,invoice_number,invoice_date,total_amount,category,raw_json"
+      },
+      "id": "supabase-store",
+      "name": "Supabase Store",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        300
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "yourmail@gmail.com",
+        "toEmail": "finance@company.com",
+        "subject": "New Invoice Processed",
+        "message": "Vendor: {{$json.vendor_name}}\nAmount: {{$json.total_amount}}\nCategory: {{$json.category}}"
+      },
+      "id": "approval-agent",
+      "name": "Approval Notification",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        1950,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "Invoices"
+      },
+      "id": "google-sheets-export",
+      "name": "Google Sheets Export",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2200,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Attachment": {
+      "main": [
+        [
+          {
+            "node": "OCR Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR Agent": {
+      "main": [
+        [
+          {
+            "node": "Invoice Extraction Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Extraction Agent": {
+      "main": [
+        [
+          {
+            "node": "Validation Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Agent": {
+      "main": [
+        [
+          {
+            "node": "Classification Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classification Agent": {
+      "main": [
+        [
+          {
+            "node": "Supabase Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Store": {
+      "main": [
+        [
+          {
+            "node": "Approval Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Notification": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets Export",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "ai-invoice-accounting-workflow"
+}
