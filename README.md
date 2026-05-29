@@ -43,6 +43,6 @@ Technologies Used
 - REST APIs
 
 Business Impact
-Reduced manual invoice processing.
-Automated accounting categorization.
-Improved finance team productivity.
+-Reduced manual invoice processing.
+-Automated accounting categorization.
+-Improved finance team productivity.
