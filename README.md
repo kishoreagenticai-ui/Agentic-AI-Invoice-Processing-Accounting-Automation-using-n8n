@@ -42,7 +42,7 @@ Technologies Used
 - Google Sheets
 - REST APIs
 
-Business Impact
--Reduced manual invoice processing.
--Automated accounting categorization.
--Improved finance team productivity.
+Business Impact -
+Reduced manual invoice processing,
+Automated accounting categorization,
+Improved finance team productivity.
